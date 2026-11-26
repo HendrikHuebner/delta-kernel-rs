@@ -426,10 +426,13 @@ pub struct VariadicExpression {
 ///
 /// Conditions are checked in order. The first TRUE condition selects its result expression;
 /// FALSE and NULL conditions fall through to the next branch. If no condition is TRUE,
-/// `else_expr` is selected. An empty branch list evaluates to `else_expr`.
-/// Every THEN result and `else_expr` must have the same logical data type, including typed NULLs.
-/// For example, integer results require an integer ELSE or a NULL typed as [`DataType::INTEGER`].
-/// No implicit casts or numeric widening are applied.
+/// `else_expr` is selected.
+///
+/// `branches` must not be empty, and engines may reject an expression without branches;
+/// [`Expression::case_when`] returns `else_expr` instead of building one. Every THEN result and
+/// `else_expr` must have the same logical data type, including typed NULLs. For example, integer
+/// results require an integer ELSE or a NULL typed as [`DataType::INTEGER`]. When the types
+/// differ, the result is unspecified: an engine may reject the expression or coerce the results.
 ///
 /// For each row, an error in a condition up to and including the selecting one, or in the selected
 /// result, must fail the evaluation; an engine may skip a subexpression whose value cannot change
@@ -440,9 +443,10 @@ pub struct VariadicExpression {
 /// # Default engine behavior
 ///
 /// The Arrow evaluator evaluates each condition only on rows no earlier branch selected, and each
-/// result only on the rows it selects. It requires evaluated results to have identical Arrow types,
-/// including string representations and nested fields. Runtime type validation checks evaluated
-/// results; unused branches are not evaluated to check their types.
+/// result only on the rows it selects. It evaluates an empty branch list as `else_expr`. It applies
+/// no implicit casts and requires evaluated results to have identical Arrow types, including string
+/// representations and nested fields. Runtime type validation checks evaluated results; unused
+/// branches are not evaluated to check their types.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CaseWhenExpression {
     /// Ordered condition/result pairs.
@@ -1086,8 +1090,7 @@ impl Expression {
 
     /// Creates a searched CASE expression from ordered condition/result `branches` and an
     /// `else_expr` fallback. Empty `branches` return `else_expr` directly.
-    /// All branch results and `else_expr` must have the same logical type, including typed NULLs;
-    /// no implicit type coercion is performed.
+    /// All branch results and `else_expr` must have the same logical type, including typed NULLs.
     /// See [`CaseWhenExpression`] for evaluation semantics.
     pub fn case_when(
         branches: impl IntoIterator<Item = (Predicate, Expression)>,
