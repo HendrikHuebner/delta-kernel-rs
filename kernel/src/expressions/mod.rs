@@ -425,15 +425,24 @@ pub struct VariadicExpression {
 /// A searched SQL `CASE WHEN` expression.
 ///
 /// Conditions are checked in order. The first TRUE condition selects its result expression;
-/// FALSE and NULL conditions fall through to the next branch. Only the selected result is
-/// evaluated for each row. If no condition is TRUE, `else_expr` is evaluated.
-/// An empty branch list evaluates to `else_expr`.
+/// FALSE and NULL conditions fall through to the next branch. If no condition is TRUE,
+/// `else_expr` is selected. An empty branch list evaluates to `else_expr`.
 /// Every THEN result and `else_expr` must have the same logical data type, including typed NULLs.
 /// For example, integer results require an integer ELSE or a NULL typed as [`DataType::INTEGER`].
-/// No implicit casts or numeric widening are applied. The Arrow evaluator requires evaluated
-/// results to have identical Arrow types, including string representations and nested fields.
-/// Runtime type validation checks evaluated results; unused branches are not evaluated to check
-/// their types.
+/// No implicit casts or numeric widening are applied.
+///
+/// For each row, an error in a condition up to and including the selecting one, or in the selected
+/// result, must fail the evaluation; an engine may skip a subexpression whose value cannot change
+/// the result. Whether the other conditions and results are evaluated, and so whether their errors
+/// surface, is unspecified, so callers must not use CASE WHEN to guard against errors. This lets an
+/// engine evaluate every branch eagerly. Evaluation order is also unspecified.
+///
+/// # Default engine behavior
+///
+/// The Arrow evaluator evaluates each condition only on rows no earlier branch selected, and each
+/// result only on the rows it selects. It requires evaluated results to have identical Arrow types,
+/// including string representations and nested fields. Runtime type validation checks evaluated
+/// results; unused branches are not evaluated to check their types.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CaseWhenExpression {
     /// Ordered condition/result pairs.
